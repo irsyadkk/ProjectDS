@@ -1,0 +1,668 @@
+---
+title: "ProjectDS"
+author: "123220143_123220176_123220177"
+date: "2024-11-29"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+##Import lib
+```{r}
+library(dplyr)
+library(dslabs)
+library(tidymodels)
+library(tidyverse)
+library(nnet)
+library(shiny)
+library(bslib)
+library(here)
+library(glmnet)
+library(caret)
+```
+
+##Import Data
+```{r}
+path = here('Data','agaricus-lepiota.csv')
+jamur=read.csv(path)
+jamurvis=read.csv(path)
+view(jamur)
+```
+
+##Delete column veil.type
+```{r}
+jamur=jamur %>% subset(select = -Jenis.Tudung)
+jamurvis=jamurvis %>% subset(select = -Jenis.Tudung)
+```
+
+##replace ? dengan modus/data yang paling sering muncul
+```{r}
+modusakartangkai= jamur %>% filter(Akar.Tangkai != "?") %>% count(Akar.Tangkai) %>% arrange(desc(n)) %>% slice(1) %>% pull(Akar.Tangkai)
+jamur=jamur %>% mutate(Akar.Tangkai=ifelse(Akar.Tangkai=="?",modusakartangkai,Akar.Tangkai))
+modusakartangkaivis= jamurvis %>% filter(Akar.Tangkai != "?") %>% count(Akar.Tangkai) %>% arrange(desc(n)) %>% slice(1) %>% pull(Akar.Tangkai)
+jamurvis=jamurvis %>% mutate(Akar.Tangkai=ifelse(Akar.Tangkai=="?",modusakartangkai,Akar.Tangkai))
+view(jamur)
+```
+
+##Rename
+```{r}
+jamur = jamur %>% mutate(Sifat= ifelse(Sifat=="p","Beracun","Dapat-Dimakan")) %>% mutate(Bentuk.Topi=ifelse(Bentuk.Topi=="b","Lonceng",ifelse(Bentuk.Topi=="c","Kerucut",ifelse(Bentuk.Topi=="x","Cembung",ifelse(Bentuk.Topi=="f","Rata",ifelse(Bentuk.Topi=="k","Menonjol","Cekung")))))) %>% mutate(Permukaan.Topi=ifelse(Permukaan.Topi=="f","Berserat",ifelse(Permukaan.Topi=="g","Bergelombang",ifelse(Permukaan.Topi=="y","Bersisik","Halus")))) %>% mutate(Warna.Topi=ifelse(Warna.Topi=="n","Coklat",ifelse(Warna.Topi=="b","Buff",ifelse(Warna.Topi=="c","Kayu-Manis",ifelse(Warna.Topi=="g","Abu",ifelse(Warna.Topi=="r","Hijau",ifelse(Warna.Topi=="p","Pink",ifelse(Warna.Topi=="u","Ungu",ifelse(Warna.Topi=="e","Merah",ifelse(Warna.Topi=="w","Putih","Kuning")))))))))) %>% mutate(Memar=ifelse(Memar=="t","Memar","Tidak")) %>% mutate(Bau=ifelse(Bau=="a","Almond",ifelse(Bau=="l","Bunga-Lawang",ifelse(Bau=="c","Arang",ifelse(Bau=="y","Amis",ifelse(Bau=="f","Busuk",ifelse(Bau=="m","Apek",ifelse(Bau=="n","Tidak-Berbau",ifelse(Bau=="p","Tajam","Pedas"))))))))) %>% mutate(Bentuk.Bilah=ifelse(Bentuk.Bilah=="a","Terikat",ifelse(Bentuk.Bilah=="d","Menurun",ifelse(Bentuk.Bilah=="f","Bebas","Berkumai")))) %>% mutate(Jarak.Bilah=ifelse(Jarak.Bilah=="c","Dekat",ifelse(Jarak.Bilah=="w","Rapat","Berjauhan"))) %>% mutate(Ukuran.Bilah=ifelse(Ukuran.Bilah=="b","Lebar","Sempit")) %>% mutate(Warna.Bilah=ifelse(Warna.Bilah=="k","Hitam",ifelse(Warna.Bilah=="n","Coklat",ifelse(Warna.Bilah=="b","Buff",ifelse(Warna.Bilah=="h","Coklat-Tua",ifelse(Warna.Bilah=="g","Abu",ifelse(Warna.Bilah=="r","Hijau",ifelse(Warna.Bilah=="o","Oranye",ifelse(Warna.Bilah=="p","Pink",ifelse(Warna.Bilah=="u","Ungu",ifelse(Warna.Bilah=="e","Merah",ifelse(Warna.Bilah=="w","Putih","Kuning")))))))))))) %>% mutate(Bentuk.Tangkai=ifelse(Bentuk.Tangkai=="e","Membesar","Mengecil")) %>% mutate(Akar.Tangkai=ifelse(Akar.Tangkai=="b","Berumbi",ifelse(Akar.Tangkai=="c","Bulat-Memanjang",ifelse(Akar.Tangkai=="u","Cangkir",ifelse(Akar.Tangkai=="e","Rata",ifelse(Akar.Tangkai=="z","Rhizomorphs","Berakar")))))) %>% mutate(Permukaan.Tangkai.Atas.Cincin=ifelse(Permukaan.Tangkai.Atas.Cincin=="f","Berserat",ifelse(Permukaan.Tangkai.Atas.Cincin=="y","Bersisik",ifelse(Permukaan.Tangkai.Atas.Cincin=="k","Halus-Sutera","Halus")))) %>% mutate(Permukaan.Tangkai.Bawah.Cincin=ifelse(Permukaan.Tangkai.Bawah.Cincin=="f","Berserat",ifelse(Permukaan.Tangkai.Bawah.Cincin=="y","Bersisik",ifelse(Permukaan.Tangkai.Bawah.Cincin=="k","Halus-Sutera","Halus")))) %>% mutate(Warna.Tangkai.Atas.Cincin=ifelse(Warna.Tangkai.Atas.Cincin=="n","Coklat",ifelse(Warna.Tangkai.Atas.Cincin=="b","Buff",ifelse(Warna.Tangkai.Atas.Cincin=="c","Kayu-Manis",ifelse(Warna.Tangkai.Atas.Cincin=="g","Abu",ifelse(Warna.Tangkai.Atas.Cincin=="o","Oranye",ifelse(Warna.Tangkai.Atas.Cincin=="p","Pink",ifelse(Warna.Tangkai.Atas.Cincin=="e","Merah",ifelse(Warna.Tangkai.Atas.Cincin=="w","Putih","Kuning"))))))))) %>% mutate(Warna.Tangkai.Bawah.Cincin=ifelse(Warna.Tangkai.Bawah.Cincin=="n","Coklat",ifelse(Warna.Tangkai.Bawah.Cincin=="b","Buff",ifelse(Warna.Tangkai.Bawah.Cincin=="c","Kayu-Manis",ifelse(Warna.Tangkai.Bawah.Cincin=="g","Abu",ifelse(Warna.Tangkai.Bawah.Cincin=="o","Oranye",ifelse(Warna.Tangkai.Bawah.Cincin=="p","Pink",ifelse(Warna.Tangkai.Bawah.Cincin=="e","Merah",ifelse(Warna.Tangkai.Bawah.Cincin=="w","Putih","Kuning"))))))))) %>% mutate(Warna.Tudung=ifelse(Warna.Tudung=="n","Coklat",ifelse(Warna.Tudung=="o","Oranye",ifelse(Warna.Tudung=="w","Putih","Kuning")))) %>% mutate(Jumlah.Cincin=ifelse(Jumlah.Cincin=="n","Tidak-Ada",ifelse(Jumlah.Cincin=="o","Satu","Dua"))) %>% mutate(Jenis.Cincin=ifelse(Jenis.Cincin=="c","Berjaring",ifelse(Jenis.Cincin=="e","Memudar",ifelse(Jenis.Cincin=="f","Melebar",ifelse(Jenis.Cincin=="l","Besar",ifelse(Jenis.Cincin=="n","Tidak-Ada",ifelse(Jenis.Cincin=="p","Menjuntai",ifelse(Jenis.Cincin=="s","Terselubung","Zona"))))))))
+
+jamur = jamur %>% mutate(Warna.Spora=ifelse(Warna.Spora=="k","Hitam",ifelse(Warna.Spora=="n","Coklat",ifelse(Warna.Spora=="h","Coklat-Tua",ifelse(Warna.Spora=="r","Hijau",ifelse(Warna.Spora=="o","Oranye",ifelse(Warna.Spora=="u","Ungu",ifelse(Warna.Spora=="w","Putih","Kuning")))))))) %>% mutate(Populasi=ifelse(Populasi=="a","Melimpah",ifelse(Populasi=="c","Bergerombol",ifelse(Populasi=="n","Banyak",ifelse(Populasi=="s","Tersebar",ifelse(Populasi=="v","Beberapa","Soliter")))))) %>% mutate(Habitat=ifelse(Habitat=="g","Rerumputan",ifelse(Habitat=="l","Dedaunan",ifelse(Habitat=="m","Padang-Rumput",ifelse(Habitat=="p","Jalur",ifelse(Habitat=="u","Perkotaan",ifelse(Habitat=="w","Tempat-Pembuangan","Hutan")))))))
+
+jamurvis = jamurvis %>% mutate(Sifat= ifelse(Sifat=="p","Beracun","Dapat-Dimakan")) %>% mutate(Bentuk.Topi=ifelse(Bentuk.Topi=="b","Lonceng",ifelse(Bentuk.Topi=="c","Kerucut",ifelse(Bentuk.Topi=="x","Cembung",ifelse(Bentuk.Topi=="f","Rata",ifelse(Bentuk.Topi=="k","Menonjol","Cekung")))))) %>% mutate(Permukaan.Topi=ifelse(Permukaan.Topi=="f","Berserat",ifelse(Permukaan.Topi=="g","Bergelombang",ifelse(Permukaan.Topi=="y","Bersisik","Halus")))) %>% mutate(Warna.Topi=ifelse(Warna.Topi=="n","Coklat",ifelse(Warna.Topi=="b","Buff",ifelse(Warna.Topi=="c","Kayu-Manis",ifelse(Warna.Topi=="g","Abu",ifelse(Warna.Topi=="r","Hijau",ifelse(Warna.Topi=="p","Pink",ifelse(Warna.Topi=="u","Ungu",ifelse(Warna.Topi=="e","Merah",ifelse(Warna.Topi=="w","Putih","Kuning")))))))))) %>% mutate(Memar=ifelse(Memar=="t","Memar","Tidak")) %>% mutate(Bau=ifelse(Bau=="a","Almond",ifelse(Bau=="l","Bunga-Lawang",ifelse(Bau=="c","Arang",ifelse(Bau=="y","Amis",ifelse(Bau=="f","Busuk",ifelse(Bau=="m","Apek",ifelse(Bau=="n","Tidak-Berbau",ifelse(Bau=="p","Tajam","Pedas"))))))))) %>% mutate(Bentuk.Bilah=ifelse(Bentuk.Bilah=="a","Terikat",ifelse(Bentuk.Bilah=="d","Menurun",ifelse(Bentuk.Bilah=="f","Bebas","Berkumai")))) %>% mutate(Jarak.Bilah=ifelse(Jarak.Bilah=="c","Dekat",ifelse(Jarak.Bilah=="w","Rapat","Berjauhan"))) %>% mutate(Ukuran.Bilah=ifelse(Ukuran.Bilah=="b","Lebar","Sempit")) %>% mutate(Warna.Bilah=ifelse(Warna.Bilah=="k","Hitam",ifelse(Warna.Bilah=="n","Coklat",ifelse(Warna.Bilah=="b","Buff",ifelse(Warna.Bilah=="h","Coklat-Tua",ifelse(Warna.Bilah=="g","Abu",ifelse(Warna.Bilah=="r","Hijau",ifelse(Warna.Bilah=="o","Oranye",ifelse(Warna.Bilah=="p","Pink",ifelse(Warna.Bilah=="u","Ungu",ifelse(Warna.Bilah=="e","Merah",ifelse(Warna.Bilah=="w","Putih","Kuning")))))))))))) %>% mutate(Bentuk.Tangkai=ifelse(Bentuk.Tangkai=="e","Membesar","Mengecil")) %>% mutate(Akar.Tangkai=ifelse(Akar.Tangkai=="b","Berumbi",ifelse(Akar.Tangkai=="c","Bulat-Memanjang",ifelse(Akar.Tangkai=="u","Cangkir",ifelse(Akar.Tangkai=="e","Rata",ifelse(Akar.Tangkai=="z","Rhizomorphs","Berakar")))))) %>% mutate(Permukaan.Tangkai.Atas.Cincin=ifelse(Permukaan.Tangkai.Atas.Cincin=="f","Berserat",ifelse(Permukaan.Tangkai.Atas.Cincin=="y","Bersisik",ifelse(Permukaan.Tangkai.Atas.Cincin=="k","Halus-Sutera","Halus")))) %>% mutate(Permukaan.Tangkai.Bawah.Cincin=ifelse(Permukaan.Tangkai.Bawah.Cincin=="f","Berserat",ifelse(Permukaan.Tangkai.Bawah.Cincin=="y","Bersisik",ifelse(Permukaan.Tangkai.Bawah.Cincin=="k","Halus-Sutera","Halus")))) %>% mutate(Warna.Tangkai.Atas.Cincin=ifelse(Warna.Tangkai.Atas.Cincin=="n","Coklat",ifelse(Warna.Tangkai.Atas.Cincin=="b","Buff",ifelse(Warna.Tangkai.Atas.Cincin=="c","Kayu-Manis",ifelse(Warna.Tangkai.Atas.Cincin=="g","Abu",ifelse(Warna.Tangkai.Atas.Cincin=="o","Oranye",ifelse(Warna.Tangkai.Atas.Cincin=="p","Pink",ifelse(Warna.Tangkai.Atas.Cincin=="e","Merah",ifelse(Warna.Tangkai.Atas.Cincin=="w","Putih","Kuning"))))))))) %>% mutate(Warna.Tangkai.Bawah.Cincin=ifelse(Warna.Tangkai.Bawah.Cincin=="n","Coklat",ifelse(Warna.Tangkai.Bawah.Cincin=="b","Buff",ifelse(Warna.Tangkai.Bawah.Cincin=="c","Kayu-Manis",ifelse(Warna.Tangkai.Bawah.Cincin=="g","Abu",ifelse(Warna.Tangkai.Bawah.Cincin=="o","Oranye",ifelse(Warna.Tangkai.Bawah.Cincin=="p","Pink",ifelse(Warna.Tangkai.Bawah.Cincin=="e","Merah",ifelse(Warna.Tangkai.Bawah.Cincin=="w","Putih","Kuning"))))))))) %>% mutate(Warna.Tudung=ifelse(Warna.Tudung=="n","Coklat",ifelse(Warna.Tudung=="o","Oranye",ifelse(Warna.Tudung=="w","Putih","Kuning")))) %>% mutate(Jumlah.Cincin=ifelse(Jumlah.Cincin=="n","Tidak-Ada",ifelse(Jumlah.Cincin=="o","Satu","Dua"))) %>% mutate(Jenis.Cincin=ifelse(Jenis.Cincin=="c","Berjaring",ifelse(Jenis.Cincin=="e","Memudar",ifelse(Jenis.Cincin=="f","Melebar",ifelse(Jenis.Cincin=="l","Besar",ifelse(Jenis.Cincin=="n","Tidak-Ada",ifelse(Jenis.Cincin=="p","Menjuntai",ifelse(Jenis.Cincin=="s","Terselubung","Zona"))))))))
+
+jamurvis = jamurvis %>% mutate(Warna.Spora=ifelse(Warna.Spora=="k","Hitam",ifelse(Warna.Spora=="n","Coklat",ifelse(Warna.Spora=="h","Coklat-Tua",ifelse(Warna.Spora=="r","Hijau",ifelse(Warna.Spora=="o","Oranye",ifelse(Warna.Spora=="u","Ungu",ifelse(Warna.Spora=="w","Putih","Kuning")))))))) %>% mutate(Populasi=ifelse(Populasi=="a","Melimpah",ifelse(Populasi=="c","Bergerombol",ifelse(Populasi=="n","Banyak",ifelse(Populasi=="s","Tersebar",ifelse(Populasi=="v","Beberapa","Soliter")))))) %>% mutate(Habitat=ifelse(Habitat=="g","Rerumputan",ifelse(Habitat=="l","Dedaunan",ifelse(Habitat=="m","Padang-Rumput",ifelse(Habitat=="p","Jalur",ifelse(Habitat=="u","Perkotaan",ifelse(Habitat=="w","Tempat-Pembuangan","Hutan")))))))
+view(jamur)
+```
+
+##Categorical to Num
+```{r}
+jamur = jamur %>% mutate(Sifat=as.factor(Sifat), Bentuk.Topi=as.factor(Bentuk.Topi),Permukaan.Topi=as.factor(Permukaan.Topi),Warna.Topi=as.factor(Warna.Topi),Memar=as.factor(Memar),Bau=as.factor(Bau),Bentuk.Bilah=as.factor(Bentuk.Bilah),Jarak.Bilah=as.factor(Jarak.Bilah),Ukuran.Bilah=as.factor(Ukuran.Bilah),Warna.Bilah=as.factor(Warna.Bilah),Bentuk.Tangkai=as.factor(Bentuk.Tangkai),Akar.Tangkai=as.factor(Akar.Tangkai),Permukaan.Tangkai.Atas.Cincin=as.factor(Permukaan.Tangkai.Atas.Cincin),Permukaan.Tangkai.Bawah.Cincin=as.factor(Permukaan.Tangkai.Bawah.Cincin),Warna.Tangkai.Atas.Cincin=as.factor(Warna.Tangkai.Atas.Cincin),Warna.Tangkai.Bawah.Cincin=as.factor(Warna.Tangkai.Bawah.Cincin),Warna.Tudung=as.factor(Warna.Tudung),Jumlah.Cincin=as.factor(Jumlah.Cincin),Jenis.Cincin=as.factor(Jenis.Cincin),Warna.Spora=as.factor(Warna.Spora),Populasi=as.factor(Populasi),Habitat=as.factor(Habitat))
+
+jamur$Bentuk.Topi= unclass(jamur$Bentuk.Topi)
+jamur$Permukaan.Topi= unclass(jamur$Permukaan.Topi)
+jamur$Warna.Topi= unclass(jamur$Warna.Topi)
+jamur$Memar= unclass(jamur$Memar)
+jamur$Bau= unclass(jamur$Bau)
+jamur$Bentuk.Bilah= unclass(jamur$Bentuk.Bilah)
+jamur$Jarak.Bilah= unclass(jamur$Jarak.Bilah)
+jamur$Ukuran.Bilah= unclass(jamur$Ukuran.Bilah)
+jamur$Warna.Bilah= unclass(jamur$Warna.Bilah)
+jamur$Bentuk.Tangkai= unclass(jamur$Bentuk.Tangkai)
+jamur$Akar.Tangkai= unclass(jamur$Akar.Tangkai)
+jamur$Permukaan.Tangkai.Atas.Cincin= unclass(jamur$Permukaan.Tangkai.Atas.Cincin)
+jamur$Permukaan.Tangkai.Bawah.Cincin= unclass(jamur$Permukaan.Tangkai.Bawah.Cincin)
+jamur$Warna.Tangkai.Atas.Cincin= unclass(jamur$Warna.Tangkai.Atas.Cincin)
+jamur$Warna.Tangkai.Bawah.Cincin= unclass(jamur$Warna.Tangkai.Bawah.Cincin)
+jamur$Warna.Tudung= unclass(jamur$Warna.Tudung)
+jamur$Jumlah.Cincin= unclass(jamur$Jumlah.Cincin)
+jamur$Jenis.Cincin= unclass(jamur$Jenis.Cincin)
+jamur$Warna.Spora= unclass(jamur$Warna.Spora)
+jamur$Populasi= unclass(jamur$Populasi)
+jamur$Habitat= unclass(jamur$Habitat)
+
+jamur = jamur %>% mutate(Sifat=as.factor(Sifat), Bentuk.Topi=as.factor(Bentuk.Topi),Permukaan.Topi=as.factor(Permukaan.Topi),Warna.Topi=as.factor(Warna.Topi),Memar=as.factor(Memar),Bau=as.factor(Bau),Bentuk.Bilah=as.factor(Bentuk.Bilah),Jarak.Bilah=as.factor(Jarak.Bilah),Ukuran.Bilah=as.factor(Ukuran.Bilah),Warna.Bilah=as.factor(Warna.Bilah),Bentuk.Tangkai=as.factor(Bentuk.Tangkai),Akar.Tangkai=as.factor(Akar.Tangkai),Permukaan.Tangkai.Atas.Cincin=as.factor(Permukaan.Tangkai.Atas.Cincin),Permukaan.Tangkai.Bawah.Cincin=as.factor(Permukaan.Tangkai.Bawah.Cincin),Warna.Tangkai.Atas.Cincin=as.factor(Warna.Tangkai.Atas.Cincin),Warna.Tangkai.Bawah.Cincin=as.factor(Warna.Tangkai.Bawah.Cincin),Warna.Tudung=as.factor(Warna.Tudung),Jumlah.Cincin=as.factor(Jumlah.Cincin),Jenis.Cincin=as.factor(Jenis.Cincin),Warna.Spora=as.factor(Warna.Spora),Populasi=as.factor(Populasi),Habitat=as.factor(Habitat))
+
+sifat=levels(jamur$Sifat)
+#view(jamur)
+```
+
+
+##Spliting
+```{r}
+set.seed(176)
+jamur_splited=jamur %>% initial_split(0.8,strata = Sifat)
+jamur_training= jamur_splited %>% training()
+jamur_testing= jamur_splited %>% testing()
+
+jamur_splited
+```
+##modelling
+```{r}
+model=logistic_reg(mode = "classification",engine = "glmnet",mixture = double(1), penalty = double(1)) %>% fit(Sifat ~ . , data=jamur_training)
+tidy(model)
+```
+##predict
+```{r}
+predclass = predict(model,new_data=jamur_testing,type = "class")
+predprob = predict(model,new_data=jamur_testing,type = "prob")
+predprob = round(predprob*100,digits = 2)
+predclass
+predprob
+```
+##eval
+```{r}
+confmatrix=confusionMatrix(jamur_testing$Sifat,predclass$.pred_class)
+accuracy = confmatrix$overall["Accuracy"]
+kappa = confmatrix$overall["Kappa"]
+confmatrix
+```
+##visualization
+```{r}
+vissifat=ggplot(
+  jamur,
+  aes(
+    x=Sifat,
+    fill = Sifat
+  )
+) + 
+geom_bar(
+) +
+labs(
+  x = "Sifat",
+  y = "Jumlah"
+) +
+  theme_classic()
+vissifat
+visconmat=fourfoldplot(as.table(confmatrix),color=c("black","green"),main = "Confusion Matrix")
+
+viscapcol = ggplot(jamurvis, aes(x = Warna.Topi, fill = Sifat,)) + 
+  geom_bar(position = "dodge") +
+  theme_classic() +
+  labs(
+    x="Warna Cap",
+    y="Jumlah"
+  )
+
+visodor = ggplot(jamurvis, aes(x = Bau, fill = Sifat)) +
+  geom_bar(position = "dodge") +
+  theme_classic()+
+  labs(
+    x="Jenis Bau",
+    y="Jumlah"
+  )
+
+visgillcol = ggplot(jamurvis, aes(x = Warna.Bilah, fill = Sifat)) +
+  geom_bar(position = "dodge") +
+  theme_classic()+
+  labs(
+    x="Warna Gill",
+    y="Jumlah"
+  )
+
+visstalkroot = ggplot(jamurvis, aes(x = Akar.Tangkai, fill = Sifat)) +
+  geom_bar(position = "dodge") +
+  theme_classic()+
+  labs(
+    x="Jenis Akar",
+    y="Jumlah"
+  )
+
+visstalkcolabovering = ggplot(jamurvis, aes(x = Warna.Tangkai.Atas.Cincin, fill = Sifat)) +
+  geom_bar(position = "dodge") +
+  theme_classic()+
+  labs(
+    x="Warna Akar Diatas Cincin",
+    y="Jumlah"
+  )
+
+visstalkcolbelowring = ggplot(jamurvis, aes(x = Warna.Tangkai.Bawah.Cincin, fill = Sifat)) +
+  geom_bar(position = "dodge") +
+  theme_classic()+
+  labs(
+    x="Warna Akar Dibawah Cincin",
+    y="Jumlah"
+  )
+
+vissporecol = ggplot(jamurvis, aes(x = Warna.Spora, fill = Sifat)) +
+  geom_bar(position = "dodge") +
+  theme_classic()+
+  labs(
+    x="Warna Sporar",
+    y="Jumlah"
+  )
+
+vishabitat = ggplot(jamurvis, aes(x = Habitat, fill = Sifat)) +
+  geom_bar(position = "dodge") +
+  theme_classic()+
+  labs(
+    x="Jenis Habitat",
+    y="Jumlah"
+  )
+```
+##shiny
+```{r}
+ui=page_fluid(
+  page_navbar(
+    bg = "#292727",
+  title = "Klasifikasi Jamur",
+  nav_panel( #Page 1
+    title = "Info",
+    class = "bslib-page-dashboard",
+  layout_columns( #total data
+    card(card_title("Total Data"),
+         textOutput(
+           outputId = "total"
+         ),
+    )
+  ),
+  layout_columns( #data spliting
+    card(card_title("Data Spliting"),
+     layout_columns(
+        card(card_title("Data Training"),
+             textOutput(
+               outputId = "training"
+             )
+        ),
+        card(card_title("Data Testing"),
+             textOutput(
+               outputId = "testing"
+             )
+        )
+     )
+    )
+  ),card(card_title("Evaluasi"),
+         layout_columns(
+            card(card_header("Akurasi"),
+                 textOutput(
+                   outputId = "akurasieval"
+                 ),
+                 textOutput(
+                   outputId = "kappa"
+                 )
+            )),
+         layout_columns(
+            card(card_header("Confusion Matrix"),
+                 plotOutput(
+                   outputId = "visualconmat"
+                 )
+            )
+         )
+    ),
+  layout_columns( #visualization
+    card(card_title("Visualisasi"),
+      layout_columns(
+        card(card_title("Perbandingan Sifat Jamur Beracun dan Dapat Dimakan"),
+          plotOutput(
+          outputId = "perbandingansifat"
+          )
+        )
+      ),
+      layout_columns(
+        card(card_title("Distribusi Warna Topi Berdasarkan Sifat"),
+          plotOutput(
+            outputId = "viscapcol"
+          )
+        ),
+        card(card_title("Distribusi Bau Berdasarkan Sifat"),
+          plotOutput(
+            outputId = "visodor"
+          )
+        )
+      ),
+      layout_columns(
+        card(card_title("Distribusi Warna Bilah Berdasarkan Sifat"),
+          plotOutput(
+            outputId = "visgillcol"   
+          )
+        ),
+        card(card_title("Distribusi Bentuk Akar Tangkai Berdasarkan Sifat"),
+          plotOutput("visstalkroot")
+        )
+      ),
+      layout_columns(
+        card(card_title("Distribusi Warna Tangkai Diatas Cincin Berdasarkan Sifat"),
+          plotOutput(
+            outputId = "visstalkcolabovering"
+          )
+        ),
+        card(card_title("Distribusi Warna Tangkai Dibawah Cincin Berdasarkan Sifat"),
+          plotOutput(
+            outputId = "visstalkcolbelowring"
+          )
+        )
+      ),
+      layout_columns(
+        card(card_title("Distribusi Warna Spora Berdasarkan Sifat"),
+          plotOutput(
+            outputId = "vissporecol"   
+          )
+        ),
+        card(card_title("Distribusi Habitat Berdasarkan Sifat"),
+          plotOutput(
+            outputId = "vishabitat")
+        )
+      )
+    )
+  )
+  ),
+  nav_panel("Tabel", #Page 2
+    selectInput(
+      inputId = "sifat", #unique
+      label = "Sifat",
+      choices = c("Dapat Dimakan" = "Dapat-Dimakan", "Beracun" = "Beracun")
+    ),
+    card(
+      tableOutput(
+      outputId = "table"
+      )
+    ),
+    card(card_title("Keterangan"),
+      "- Sifat : Sifat jamur",
+      tags$br(),
+      "- Bentuk.Topi : Bentuk topi jamur",
+      tags$br(),
+      "- Permukaan.Topi : Permukaan topi jamur",
+      tags$br(),
+      "- Warna.Topi : Warna topi jamur",
+      tags$br(),
+      "- Memar : Memar pada jamur",
+      tags$br(),
+      "- Bau : Bau jamur",
+      tags$br(),
+      "- Bentuk.Bilah : Bentuk bilah jamur",
+      tags$br(),
+      "- Jarak.Bilah : Jarak antara bilah pada bilah jamur",
+      tags$br(),
+      "- Ukuran.Bilah : Ukuran bilah jamur",
+      tags$br(),
+      "- Warna.Bilah : Warna bilah jamur",
+      tags$br(),
+      "- Bentuk.Tangkai : Bentuk tangkai jamur",
+      tags$br(),
+      "- Akar.Tangkai : Bentuk akar tangkai jamur",
+      tags$br(),
+      "- Permukaan.Tangkai.Atas.Cincin : Tekstur permukaan tangkai jamur diatas cincin jamur",
+      tags$br(),
+      "- Permukaan.Tangkai.Bawah.Cincin : Tekstur permukaan tangkai jamur diatas cincin jamur",
+      tags$br(),
+      "- Warna.Tangkai.Atas.Cincin : Warna tangkai jamur diatas cincin",
+      tags$br(),
+      "- Warna.Tangkai.Bawah.Cincin : Warna tangkai jamur dibawah cincin",
+      tags$br(),
+      "- Warna.Tudung : Warna tudung pada jamur",
+      tags$br(),
+      "- Jumlah.Cincin : Jumlah cincin pada tangkai jamur",
+      tags$br(),
+      "- Jenis.Cincin : Jenis cincin pada tangkai jamur",
+      tags$br(),
+      "- Warna.Spora : Warna spora jamur",
+      tags$br(),
+      "- Populasi : Jumlah populasi jamur pada suatu daerah",
+      tags$br(),
+      "- Habitat : Tempat tumbuh jamur di alam"
+    )
+  ),
+  nav_panel("Klasifikasi", #Page 3
+    card(card_title("Input Data"), #input
+    layout_columns(
+    selectInput(
+    inputId = "capshape", #unique
+    label = "Bentuk Topi",
+    choices = c("Lonceng" = "4", "Kerucut" = "3", "Cembung" = "2","Rata" = "6","Menonjol" = "5","Cekung" = "1")
+    ),
+    selectInput(
+    inputId = "capsurface", #unique
+    label = "Permukaan Topi",
+    choices = c("Berserat" = "2", "Bergelombang" = "1", "Bersisik" = "3","Halus" = "4")
+    ),
+    selectInput(
+    inputId = "capcolor", #unique
+    label = "Warna Topi",
+    choices = c("Coklat" = "3", "Buff" = "2", "Kayu Manis" = "5","Abu" = "1","Hijau"="4", "Pink" = "8","Ungu" = "10","Merah"="7","Putih"="9","Kuning"="6")
+    ),
+    selectInput(
+    inputId = "bruises", #unique
+    label = "Memar",
+    choices = c("Memar" = "1", "Tidak" = "2")
+    ),
+    selectInput(
+    inputId = "odor", #unique
+    label = "Bau",
+    choices = c("Almond" = "1", "Bunga Lawang" = "5", "Arang" = "4","Amis" = "2","Busuk" = "6", "Apek" = "3", "Tajam" = "8","Pedas" = "7","Tidak Berbau" = "9")
+    ),
+    selectInput(
+    inputId = "gillattachment", #unique
+    label = "Bentuk Bilah",
+    choices = c("Terikat" = "2", "Bebas" = "1")
+    ),
+    selectInput(
+    inputId = "gillspacing", #unique
+    label = "Jarak Bilah",
+    choices = c("Dekat" = "1", "Rapat" = "2")
+    ),
+    selectInput(
+    inputId = "gillsize", #unique
+    label = "Ukuran Bilah",
+    choices = c("Lebar" = "1", "Sempit" = "2")
+    ),
+    selectInput(
+    inputId = "gillcolor", #unique
+    label = "Warna Bilah",
+    choices = c("Hitam" = "6", "Coklat" = "3", "Buff" = "2","Coklat Tua" = "4","Abu" = "1", "Hijau" = "5", "Oranye" = "9","Pink" = "10","Ungu" = "12", "Merah" = "8", "Putih" = "11","Kuning" = "7")
+    ),
+    selectInput(
+    inputId = "stalkshape", #unique
+    label = "Bentuk Tangkai",
+    choices = c("Membesar" = "1", "Mengecil" = "2")
+    ),
+    selectInput(
+    inputId = "stalkroot", #unique
+    label = "Akar Tangkai",
+    choices = c("Berumbi" = "2", "Bulat Memanjang" = "3","Rata" = "4","Berakar" = "1")
+    ),
+    selectInput(
+    inputId = "stalksurfaceabovering", #unique
+    label = "Permukaan Tangkai Diatas Cincin",
+    choices = c("Berserat" = "1", "Bersisik" = "2","Halus Sutera" = "4", "Halus" = "3")
+    ),
+    selectInput(
+    inputId = "stalksurfacebelowring", #unique
+    label = "Permukaan Tangkai Dibawah Cincin",
+    choices = c("Berserat" = "1", "Bersisik" = "2","Halus Sutera" = "4", "Halus" = "3")
+    ),
+    selectInput(
+    inputId = "stalkcolorabovering", #unique
+    label = "Warna Tangkai Diatas Cincin",
+    choices = c("Coklat" = "3", "Buff" = "2", "Kayu Manis" = "4","Abu" = "1", "Oranye" = "7","Pink" = "8","Merah" = "6", "Putih" = "9","Kuning" = "5")
+    ),
+    selectInput(
+    inputId = "stalkcolorbelowring", #unique
+    label = "Warna Tangkai Dibawah Cincin",
+    choices = c("Coklat" = "3", "Buff" = "2", "Kayu Manis" = "4","Abu" = "1", "Oranye" = "7","Pink" = "8","Merah" = "6", "Putih" = "9","Kuning" = "5")
+    ),
+    selectInput(
+    inputId = "veilcolor", #unique
+    label = "Warna Tudung",
+    choices = c("Coklat" = "1", "Oranye" = "3","Putih" = "4", "Kuning" = "2")
+    ),
+    selectInput(
+    inputId = "ringnumber", #unique
+    label = "Jumlah Cincin",
+    choices = c("Satu" = "2", "Dua" = "1","Tidak Ada"="3")
+    ),
+    selectInput(
+    inputId = "ringtype", #unique
+    label = "Jenis Cincin",
+    choices = c("Memudar" = "3","Melebar" = "2", "Besar" = "1","Menjuntai" = "4","Tidak Ada" = "5")
+    ),
+    selectInput(
+    inputId = "sporeprintcolor", #unique
+    label = "Warna Spora",
+    choices = c("Hitam" = "4", "Coklat" = "1","Buff" = "1", "Coklat Tua" = "2", "Hijau" = "3","Oranye" = "6", "Ungu" = "8", "Putih" = "7","Kuning" = "5")
+    ),
+    selectInput(
+    inputId = "population", #unique
+    label = "Populasi",
+    choices = c("Melimpah" = "4", "Bergerombol" = "3","Banyak"="1", "Tersebar" = "6","Beberapa"="2","Soliter"="5")
+    ),
+    selectInput(
+    inputId = "habitat", #unique
+    label = "Habitat",
+    choices = c("Rerumputan" = "6", "Dedaunan" = "1","Padang Rumput" = "4", "Jalur" = "3","Perkotaan" = "5", "Tempat Pembuangan" = "7","Hutan" = "2")
+    ),
+    )
+  )
+  ,
+    actionButton( #button
+    inputId = "klasifikasi",
+    label = "Klasifikasi",
+    width = 1450
+    ),
+  card(card_title("Hasil Klasifikasi"),
+    layout_columns(
+      card(card_title("Sifat"),
+       textOutput( #output text
+       outputId = "hasil"
+       )
+      ),
+      card(card_title("Confidence Level"),
+       textOutput(
+       outputId = "confidence"
+       )
+      )
+    )
+  )),
+  nav_spacer(),
+  nav_item(
+    input_dark_mode(id = "dark_mode", mode = "light")
+  ),
+)
+)
+```
+
+##shiny logic
+```{r}
+server=function(input,output)
+{
+  output$table = renderTable(
+    head(
+      jamurvis %>% filter(
+      Sifat == input$sifat
+      ),20  
+    )
+  )
+  
+  output$perbandingansifat = renderPlot(
+    vissifat
+  )
+  output$total = renderText(
+    nrow(jamur)
+  )
+  output$training= renderText(
+    jamur_training %>% nrow()
+  )
+  output$testing = renderText(
+    jamur_testing %>% nrow()
+  )
+  output$akurasieval = renderText(
+    paste(
+      "Akurasi : ",accuracy," %",sep = ""
+    )
+  )
+  output$kappa = renderText(
+    paste(
+      "Kappa : ",kappa,sep = ""
+    )
+  )
+  output$visualconmat = renderPlot(
+    {
+    fourfoldplot(
+    as.table(confmatrix$table),
+    color = c("black", "green"),
+    main = "Confusion Matrix"
+    )
+    }
+  )
+  output$viscapcol = renderPlot(
+    viscapcol
+  )
+  
+  output$visodor = renderPlot(
+    visodor
+  )
+  
+  output$visgillcol = renderPlot(
+    visgillcol
+  )
+  
+  output$visstalkroot = renderPlot(
+    visstalkroot
+  )
+  
+  output$visstalkcolabovering = renderPlot(
+    visstalkcolabovering
+  )
+  
+  output$visstalkcolbelowring = renderPlot(
+    visstalkcolbelowring
+  )
+  
+  output$vissporecol = renderPlot(
+    vissporecol
+  )
+  
+  output$vishabitat = renderPlot(
+    vishabitat
+  )
+  
+  output$hasil = renderText({
+    input = data.frame(
+    Bentuk.Topi = as.factor(input$capshape),
+    Permukaan.Topi = as.factor(input$capsurface),
+    Warna.Topi = as.factor(input$capcolor),
+    Memar = as.factor(input$bruises),
+    Bau = as.factor(input$odor),
+    Bentuk.Bilah = as.factor(input$gillattachment),
+    Jarak.Bilah = as.factor(input$gillspacing),
+    Ukuran.Bilah = as.factor(input$gillsize),
+    Warna.Bilah = as.factor(input$gillcolor),
+    Bentuk.Tangkai = as.factor(input$stalkshape),
+    Akar.Tangkai = as.factor(input$stalkroot),
+    Permukaan.Tangkai.Atas.Cincin = as.factor(input$stalksurfaceabovering),
+    Permukaan.Tangkai.Bawah.Cincin = as.factor(input$stalksurfacebelowring),
+    Warna.Tangkai.Atas.Cincin = as.factor(input$stalkcolorabovering),
+    Warna.Tangkai.Bawah.Cincin = as.factor(input$stalkcolorbelowring),
+    Warna.Tudung = as.factor(input$veilcolor),
+    Jumlah.Cincin = as.factor(input$ringnumber),
+    Jenis.Cincin = as.factor(input$ringtype),
+    Warna.Spora = as.factor(input$sporeprintcolor),
+    Populasi = as.factor(input$population),
+    Habitat = as.factor(input$habitat)
+    )
+      
+    hasil_class = predict(
+      model,
+      new_data = input,
+      type="class"
+    )
+    
+    sifatjamur=as.character(sifat[as.numeric(hasil_class)])
+    if(sifatjamur=="Dapat-Dimakan")
+    {
+      sifatjamur="Dapat dimakan"
+    }
+    else{
+      sifatjamur="Beracun"
+    }
+    
+    sifatjamur
+  }) |>bindEvent(input$klasifikasi)
+  
+  output$confidence = renderText({
+    input = data.frame(
+    Bentuk.Topi = as.factor(input$capshape),
+    Permukaan.Topi = as.factor(input$capsurface),
+    Warna.Topi = as.factor(input$capcolor),
+    Memar = as.factor(input$bruises),
+    Bau = as.factor(input$odor),
+    Bentuk.Bilah = as.factor(input$gillattachment),
+    Jarak.Bilah = as.factor(input$gillspacing),
+    Ukuran.Bilah = as.factor(input$gillsize),
+    Warna.Bilah = as.factor(input$gillcolor),
+    Bentuk.Tangkai = as.factor(input$stalkshape),
+    Akar.Tangkai = as.factor(input$stalkroot),
+    Permukaan.Tangkai.Atas.Cincin = as.factor(input$stalksurfaceabovering),
+    Permukaan.Tangkai.Bawah.Cincin = as.factor(input$stalksurfacebelowring),
+    Warna.Tangkai.Atas.Cincin = as.factor(input$stalkcolorabovering),
+    Warna.Tangkai.Bawah.Cincin = as.factor(input$stalkcolorbelowring),
+    Warna.Tudung = as.factor(input$veilcolor),
+    Jumlah.Cincin = as.factor(input$ringnumber),
+    Jenis.Cincin = as.factor(input$ringtype),
+    Warna.Spora = as.factor(input$sporeprintcolor),
+    Populasi = as.factor(input$population),
+    Habitat = as.factor(input$habitat)
+    )
+    
+    hasil_probs=predict(
+      model,
+      new_data = input,
+      type = "prob"
+    )
+    
+    persentase = round(max(hasil_probs)*100,digits = 2)
+    paste(
+      persentase," %",sep =""
+    )
+  }) |>bindEvent(input$klasifikasi)
+  
+}
+```
+
+
+```{r}
+shinyApp(ui,server)
+```
